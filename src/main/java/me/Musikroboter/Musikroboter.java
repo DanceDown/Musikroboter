@@ -23,12 +23,13 @@ public class Musikroboter {
 
     private Musikroboter() throws LoginException, InterruptedException {
 
-        jda = JDABuilder.createDefault("/*Discord-Bot Token*/")
+        Scanner token = new Scanner(System.in);
+        jda = JDABuilder.createDefault(token.nextLine())
                 .enableCache(CacheFlag.VOICE_STATE)
                 .setActivity(Activity.listening("/help"))
                 .addEventListeners(new Listener())
                 .build().awaitReady();
-
+        token.close();
         for(Guild g : jda.getGuilds()) addSlashCommands(g);
 
         Scanner sc = new Scanner(System.in);
