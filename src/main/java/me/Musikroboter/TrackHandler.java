@@ -4,6 +4,8 @@ import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
 import com.sedmelluq.discord.lavaplayer.player.event.AudioEventAdapter;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason;
+import net.dv8tion.jda.api.OnlineStatus;
+import net.dv8tion.jda.api.entities.Activity;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -23,8 +25,8 @@ public class TrackHandler extends AudioEventAdapter {
     public TrackHandler(AudioPlayer player) {
 
         this.player = player;
-        this.queue = new LinkedBlockingQueue<AudioTrack>();
-        this.loopedQueue = new LinkedBlockingQueue<AudioTrack>();
+        this.queue = new LinkedBlockingQueue<>();
+        this.loopedQueue = new LinkedBlockingQueue<>();
 
     }
 
@@ -33,7 +35,11 @@ public class TrackHandler extends AudioEventAdapter {
         if(!player.startTrack(track.makeClone(), true)) {
             loopedQueue.add(track);
             return queue.offer(track);
-        } else currentTrack = track;
+        } else {
+            loopedQueue.add(track);
+            currentTrack = track;
+            Musikroboter.jda.getPresence().setPresence(OnlineStatus.DO_NOT_DISTURB, Activity.playing(track.getInfo().title));
+        }
 
         return true;
 
@@ -41,8 +47,8 @@ public class TrackHandler extends AudioEventAdapter {
 
     public boolean jump(int secs) {
 
-        long delta = currentTrack.getPosition() + secs * 1000L;
-        if(delta >= currentTrack.getDuration() && delta <= 0) {
+        long delta = player.getPlayingTrack().getPosition() + secs * 1000L;
+        if(delta >= player.getPlayingTrack().getDuration() && delta <= 0) {
             return false;
         } else {
             player.getPlayingTrack().setPosition(delta);
@@ -77,12 +83,12 @@ public class TrackHandler extends AudioEventAdapter {
 
         List<AudioTrack> temp = new ArrayList<>(queue.stream().toList());
         Collections.shuffle(temp);
-        queue = new LinkedBlockingQueue<AudioTrack>(temp);
+        queue = new LinkedBlockingQueue<>(temp);
 
 
         temp = new ArrayList<>(loopedQueue.stream().toList());
         Collections.shuffle(temp);
-        loopedQueue = new LinkedBlockingQueue<AudioTrack>(temp);
+        loopedQueue = new LinkedBlockingQueue<>(temp);
 
     }
 
@@ -104,6 +110,7 @@ public class TrackHandler extends AudioEventAdapter {
 
         boolean paused;
         player.setPaused(paused = !player.isPaused());
+        Musikroboter.jda.getPresence().setPresence(paused ? OnlineStatus.IDLE : OnlineStatus.DO_NOT_DISTURB, Activity.playing(paused ? "break" : currentTrack.getInfo().title));
         return paused;
 
     }
@@ -111,10 +118,9 @@ public class TrackHandler extends AudioEventAdapter {
     public boolean pause(int duration, TimeUnit time) {
 
         boolean setPaused = !player.isPaused();
+        Musikroboter.jda.getPresence().setPresence(setPaused ? OnlineStatus.DO_NOT_DISTURB : OnlineStatus.IDLE, Activity.playing(setPaused ? currentTrack.getInfo().title : "break" + " for " + duration + " " + time.name()));
         pauseService = Executors.newSingleThreadScheduledExecutor();
-        pauseService.schedule(() -> {
-            player.setPaused(setPaused);
-        }, duration, time);
+        pauseService.schedule((Runnable) this::pause, duration, time);
         return setPaused;
 
     }
@@ -127,28 +133,37 @@ public class TrackHandler extends AudioEventAdapter {
         return looped;
     }
 
+    // returns false if no tracks to play and looping wasn't successful (e.g. due to looped not being true)
     public boolean next() {
 
         if(queue.isEmpty() && loopNotPossible()) return false;
 
-        if(!looped.getKey() || !looped.getValue() || currentTrack == null) currentTrack = queue.poll();
+        if(looped.getKey() && !looped.getValue() || !looped.getKey() || currentTrack == null) currentTrack = queue.poll();
+        if(currentTrack == null) return false;
         player.playTrack(currentTrack.makeClone());
         return true;
 
     }
 
+    // Returns false, if successfully looped
     private boolean loopNotPossible() {
-        if(looped.getKey() && !looped.getValue() && !loopedQueue.isEmpty()) {
-            queue = new LinkedBlockingQueue<AudioTrack>(loopedQueue);
+        if(looped.getKey() && (looped.getValue() || !loopedQueue.isEmpty())) {
+            queue = new LinkedBlockingQueue<>(loopedQueue);
             return false;
         }
         return true;
-    } // Returns false, if successfully looped
+    }
 
     @Override
     public void onTrackEnd(AudioPlayer player, AudioTrack track, AudioTrackEndReason endReason) {
 
-        if(endReason.mayStartNext) next();
+        if(endReason.mayStartNext) {
+            if(next()) {
+                Musikroboter.jda.getPresence().setPresence(OnlineStatus.DO_NOT_DISTURB, Activity.playing(currentTrack.getInfo().title));
+            } else {
+                Musikroboter.jda.getPresence().setPresence(OnlineStatus.ONLINE, Activity.listening("/help"));
+            }
+        }
 
     }
 

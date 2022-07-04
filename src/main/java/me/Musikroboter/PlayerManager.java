@@ -54,7 +54,7 @@ public class PlayerManager {
 
         final MusicManager manager = this.getMusicManager(channel.getGuild());
 
-        this.playerManager.loadItemOrdered(manager, url, new AudioLoadResultHandler() {
+        this.playerManager.loadItemOrdered(manager, link, new AudioLoadResultHandler() {
             @Override
             public void trackLoaded(AudioTrack track) {
                 addTrack(track);
@@ -92,7 +92,7 @@ public class PlayerManager {
                 hook.sendMessageEmbeds(new EmbedBuilder()
                         .setTitle("Couldn't be loaded!")
                         .setColor(Color.RED)
-                        .setDescription(String.join("","Couldn't load `", link, "`!")).build()).queue();
+                        .setDescription(String.join("","Couldn't load `", url, "`!")).build()).queue();
 
             }
 

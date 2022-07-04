@@ -13,7 +13,7 @@ import java.util.Scanner;
 
 public class Musikroboter {
 
-    static JDA jda;
+    public static JDA jda;
 
     public static void main(String[] args) throws LoginException, InterruptedException {
 
@@ -23,7 +23,7 @@ public class Musikroboter {
 
     private Musikroboter() throws LoginException, InterruptedException {
 
-        jda = JDABuilder.createDefault("Nzc5MDI4Mzc5NjMzOTc1MzE3.Ge-AZE.8qmmi-khWtxhCny-WPXG98kTWzkHuj5-Mc6lhA")
+        jda = JDABuilder.createDefault("/*Discord-Bot Token*/")
                 .enableCache(CacheFlag.VOICE_STATE)
                 .setActivity(Activity.listening("/help"))
                 .addEventListeners(new Listener())
@@ -69,6 +69,7 @@ public class Musikroboter {
         g.upsertCommand("shuffle","Shuffles the playlist").queue();
         g.upsertCommand("loop","Repeats the current track or playlist")
                 .addOption(OptionType.BOOLEAN,"track","Whether it should repeat the playlist or just the playing track",false).queue();
+        g.upsertCommand("info","Shows information about the current track").queue();
         g.upsertCommand("help","It is going to send you instructions of how you're intended to use it").queue();
 
     }
