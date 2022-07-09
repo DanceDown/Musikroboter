@@ -29,19 +29,17 @@ public class Musikroboter {
                 .setActivity(Activity.listening("/help"))
                 .addEventListeners(new Listener())
                 .build().awaitReady();
-        token.close();
         for(Guild g : jda.getGuilds()) addSlashCommands(g);
-
         Scanner sc = new Scanner(System.in);
         while(true) {
-            String str = sc.next();
-            System.out.println(str);
+            String str = sc.nextLine();
             if(str.toLowerCase().matches("^s[hutdown]*")) {
                 jda.getPresence().setPresence(OnlineStatus.IDLE, Activity.playing("shutting down..."));
                 break;
             }
         }
 
+        sc.close();
         jda.cancelRequests();
         jda.shutdown();
         System.exit(0);

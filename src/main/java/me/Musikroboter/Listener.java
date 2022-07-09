@@ -45,7 +45,7 @@ public class Listener extends ListenerAdapter {
                     return;
                 }
 
-                if (!m.getVoiceState().getChannel().equals(activeVChannel) && activeVChannel.getMembers().size() > 1) {
+                if (activeVChannel != null && !m.getVoiceState().getChannel().equals(activeVChannel) && activeVChannel.getMembers().size() > 1) {
                     sendMessage(ev, "Sorry", "I can't do that whilst playing for somebody else! 💔", Color.RED);
                     return;
                 }
@@ -209,15 +209,15 @@ public class Listener extends ListenerAdapter {
                 AudioTrackInfo info = track.getInfo();
 
                 long temp_duration = track.getDuration();
-                int hours = (int) (temp_duration / 360000);
-                temp_duration -= hours * 360000L;
+                int hours = (int) (temp_duration / 3600000);
+                temp_duration -= hours * 3600000L;
                 int mins = (int) (temp_duration / 60000);
                 temp_duration -= mins * 60000L;
                 int secs = (int) (temp_duration / 1000);
 
                 temp_duration = track.getPosition();
-                int poshours = (int) (temp_duration / 360000);
-                temp_duration -= poshours * 360000L;
+                int poshours = (int) (temp_duration / 3600000);
+                temp_duration -= poshours * 3600000L;
                 int posmins = (int) (temp_duration / 60000);
                 temp_duration -= posmins * 60000L;
                 int possecs = (int) (temp_duration / 1000);
