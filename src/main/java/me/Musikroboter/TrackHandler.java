@@ -141,6 +141,7 @@ public class TrackHandler extends AudioEventAdapter {
         if(looped.getKey() && !looped.getValue() || !looped.getKey() || currentTrack == null) currentTrack = queue.poll();
         if(currentTrack == null) return false;
         player.playTrack(currentTrack.makeClone());
+        Musikroboter.jda.getPresence().setPresence(OnlineStatus.DO_NOT_DISTURB, Activity.playing(currentTrack.getInfo().title));
         return true;
 
     }
@@ -158,9 +159,7 @@ public class TrackHandler extends AudioEventAdapter {
     public void onTrackEnd(AudioPlayer player, AudioTrack track, AudioTrackEndReason endReason) {
 
         if(endReason.mayStartNext) {
-            if(next()) {
-                Musikroboter.jda.getPresence().setPresence(OnlineStatus.DO_NOT_DISTURB, Activity.playing(currentTrack.getInfo().title));
-            } else {
+            if(!next()) {
                 Musikroboter.jda.getPresence().setPresence(OnlineStatus.ONLINE, Activity.listening("/help"));
             }
         }
