@@ -10,10 +10,9 @@ import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.TextChannel;
-import net.dv8tion.jda.api.interactions.InteractionHook;
+import net.dv8tion.jda.api.interactions.callbacks.IReplyCallback;
 
-
-import java.awt.Color;
+import java.awt.*;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.HashMap;
@@ -34,6 +33,8 @@ public class PlayerManager {
         AudioSourceManagers.registerRemoteSources(this.playerManager);
         AudioSourceManagers.registerLocalSource(this.playerManager);
 
+        playerManager.getConfiguration().setFilterHotSwapEnabled(true);
+
     }
 
     public MusicManager getMusicManager(Guild g) {
@@ -44,7 +45,7 @@ public class PlayerManager {
         });
     }
 
-    public void load(TextChannel channel, InteractionHook hook, String url) {
+    public void load(TextChannel channel, IReplyCallback hook, String url) {
 
         boolean isURL;
         final String link;
@@ -66,12 +67,14 @@ public class PlayerManager {
                 final List<AudioTrack> list = playlist.getTracks();
                 if(!list.isEmpty()) {
                     if(isURL) {
-                        for(AudioTrack track : list) manager.handler.queue(track);
-                        hook.sendMessageEmbeds(new EmbedBuilder()
+                        for(AudioTrack track : list) manager.handler.queue(channel, track);
+                        hook.replyEmbeds(new EmbedBuilder()
                                 .setTitle("Adding playlist...")
                                 .setColor(Color.GREEN)
-                                .setDescription(String.join("","You added the playlist `",playlist.getName(), "`")).build()).queue();
-                    } else addTrack(list.get(0));
+                                .setDescription(String.join("","You added the playlist `",playlist.getName(), "`")).build()).setEphemeral(true).queue();
+                    } else {
+                        addTrack(list.get(0));
+                    }
                 }
 
             }
@@ -79,36 +82,36 @@ public class PlayerManager {
             @Override
             public void noMatches() {
 
-                hook.sendMessageEmbeds(new EmbedBuilder()
+                hook.replyEmbeds(new EmbedBuilder()
                         .setTitle("Nothing found")
                         .setColor(Color.RED)
-                        .setDescription(String.join("", "Couldn't find `", link, "`!")).build()).queue();
+                        .setDescription(String.join("", "Couldn't find `", link, "`!")).build()).setEphemeral(true).queue();
 
             }
 
             @Override
             public void loadFailed(FriendlyException ex) {
 
-                hook.sendMessageEmbeds(new EmbedBuilder()
+                hook.replyEmbeds(new EmbedBuilder()
                         .setTitle("Couldn't be loaded!")
                         .setColor(Color.RED)
-                        .setDescription(String.join("","Couldn't load `", url, "`!")).build()).queue();
+                        .setDescription(String.join("","Couldn't load `", url, "`!")).build()).setEphemeral(true).queue();
 
             }
 
             private void addTrack(AudioTrack track) {
-                if(manager.handler.queue(track)) {
-                    hook.sendMessageEmbeds(new EmbedBuilder()
+                if(manager.handler.queue(channel, track)) {
+                    hook.replyEmbeds(new EmbedBuilder()
                             .setTitle("Adding track...")
                             .setColor(Color.GREEN)
                             .setDescription(String.join("", "You added `", track.getInfo().title, "` by `",
-                                    track.getInfo().author, "`")).build()).queue();
+                                    track.getInfo().author, "`")).build()).setEphemeral(true).queue();
                 } else {
-                    hook.sendMessageEmbeds(new EmbedBuilder()
+                    hook.replyEmbeds(new EmbedBuilder()
                             .setTitle("Not adding track")
                             .setColor(Color.RED)
                             .setDescription(String.join("", "Couldn't add `", track.getInfo().title, "` by `",
-                                    track.getInfo().author, "`, probably because the list is full")).build()).queue();
+                                    track.getInfo().author, "`, probably because the list is full")).build()).setEphemeral(true).queue();
                 }
             }
         });

@@ -6,6 +6,7 @@ import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason;
 import net.dv8tion.jda.api.OnlineStatus;
 import net.dv8tion.jda.api.entities.Activity;
+import net.dv8tion.jda.api.entities.TextChannel;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -30,14 +31,19 @@ public class TrackHandler extends AudioEventAdapter {
 
     }
 
-    public boolean queue(AudioTrack track) {
+    public boolean queue(TextChannel infoCardChannel, AudioTrack track) {
 
         if(!player.startTrack(track.makeClone(), true)) {
+
+            boolean value = queue.offer(track);
+            if(queue.size() == 1) updateInfoCard();
             loopedQueue.add(track);
-            return queue.offer(track);
+            return value;
         } else {
             loopedQueue.add(track);
             currentTrack = track;
+            InfoCard.setChannel(infoCardChannel);
+            updateInfoCard();
             Musikroboter.jda.getPresence().setPresence(OnlineStatus.DO_NOT_DISTURB, Activity.playing(track.getInfo().title));
         }
 
@@ -90,11 +96,14 @@ public class TrackHandler extends AudioEventAdapter {
         Collections.shuffle(temp);
         loopedQueue = new LinkedBlockingQueue<>(temp);
 
+        updateInfoCard();
+
     }
 
     public void setLooped(boolean looped, boolean single) {
 
         this.looped = Map.entry(looped, single);
+        updateInfoCard();
 
     }
 
@@ -103,6 +112,8 @@ public class TrackHandler extends AudioEventAdapter {
         queue.clear();
         loopedQueue.clear();
         player.stopTrack();
+        currentTrack = null;
+        if(player.isPaused()) player.setPaused(false);
 
     }
 
@@ -142,6 +153,7 @@ public class TrackHandler extends AudioEventAdapter {
         if(currentTrack == null) return false;
         player.playTrack(currentTrack.makeClone());
         Musikroboter.jda.getPresence().setPresence(OnlineStatus.DO_NOT_DISTURB, Activity.playing(currentTrack.getInfo().title));
+        updateInfoCard();
         return true;
 
     }
@@ -160,19 +172,34 @@ public class TrackHandler extends AudioEventAdapter {
 
         if(endReason.mayStartNext) {
             if(!next()) {
-                Musikroboter.jda.getPresence().setPresence(OnlineStatus.ONLINE, Activity.listening("/help"));
+                InfoCard.destroy();
+                Musikroboter.jda.getPresence().setPresence(OnlineStatus.DO_NOT_DISTURB, Activity.listening("/help"));
             }
+        } else {
+            InfoCard.destroy();
+            Musikroboter.jda.getPresence().setPresence(OnlineStatus.DO_NOT_DISTURB, Activity.listening("/help"));
         }
 
     }
 
     @Override
     public void onPlayerPause(AudioPlayer player) {
+        InfoCard.setPaused(true);
         if(pauseService != null && !pauseService.isShutdown()) pauseService.shutdownNow();
     }
 
     @Override
     public void onPlayerResume(AudioPlayer player) {
+        InfoCard.setPaused(false);
+        updateInfoCard();
         if(pauseService != null && !pauseService.isShutdown()) pauseService.shutdownNow();
+    }
+
+    private void updateInfoCard() {
+        InfoCard.updateMessage(currentTrack,
+                looped.getKey() && looped.getValue() ?
+                        currentTrack.getInfo().title
+                        : (queue.peek() == null ? (looped.getKey() && !loopedQueue.isEmpty() ? loopedQueue.peek().getInfo().title : "None")
+                        : queue.peek().getInfo().title));
     }
 }
