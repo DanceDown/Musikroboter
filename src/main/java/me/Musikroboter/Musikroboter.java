@@ -1,48 +1,61 @@
 package me.Musikroboter;
 
+import dev.arbjerg.lavalink.client.Helpers;
+import dev.arbjerg.lavalink.client.LavalinkClient;
+import dev.arbjerg.lavalink.client.NodeOptions;
+import dev.arbjerg.lavalink.libraries.jda.JDAVoiceUpdateListener;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
-import net.dv8tion.jda.api.OnlineStatus;
 import net.dv8tion.jda.api.entities.Activity;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.utils.cache.CacheFlag;
 
-import javax.security.auth.login.LoginException;
 import java.util.Scanner;
 
 public class Musikroboter {
 
-    public static JDA jda;
+    private static JDA jda;
+    private static LavalinkClient client;
 
-    public static void main(String[] args) throws LoginException, InterruptedException {
+    public static void main(String[] args) throws InterruptedException {
 
         new Musikroboter();
 
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            PlayerManager.getINSTANCE().getTrackHandlers().forEach(((guildID, trackHandler) -> trackHandler.stop()));
+            jda.cancelRequests();
+            client.close();
+            jda.shutdown();
+            System.exit(0);
+        }));
+
     }
 
-    private Musikroboter() throws LoginException, InterruptedException {
+    private Musikroboter() throws InterruptedException {
 
-        Scanner token = new Scanner(System.in);
-        jda = JDABuilder.createDefault(token.nextLine().trim())
+        System.out.print("Enter the token:\t");
+        Scanner sc = new Scanner(System.in);
+        final String token = sc.nextLine().trim();
+        System.out.print("Enter the password:\t");
+        final String password = sc.nextLine().trim();
+        sc.close();
+
+        client = new LavalinkClient(Helpers.getUserIdFromToken(token));
+        client.addNode(new NodeOptions.Builder()
+                .setName("Server")
+                .setServerUri("http://127.0.0.1:2333")
+                .setPassword(password)
+                .build());
+
+        jda = JDABuilder.createDefault(token)
                 .enableCache(CacheFlag.VOICE_STATE)
                 .setActivity(Activity.listening("/help"))
                 .addEventListeners(new Listener())
+                .setVoiceDispatchInterceptor(new JDAVoiceUpdateListener(client))
                 .build().awaitReady();
-        for(Guild g : jda.getGuilds()) addSlashCommands(g);
-        Scanner sc = new Scanner(System.in);
-        while(true) {
-            String str = sc.nextLine();
-            if(str.toLowerCase().matches("^s[hutdown]*")) {
-                jda.getPresence().setPresence(OnlineStatus.IDLE, Activity.playing("shutting down..."));
-                break;
-            }
-        }
-
-        sc.close();
-        jda.cancelRequests();
-        jda.shutdown();
-        System.exit(0);
+        for(Guild g : jda.getGuilds())
+            addSlashCommands(g);
 
     }
 
@@ -59,7 +72,7 @@ public class Musikroboter {
                 .addOption(OptionType.STRING, "timeunit", "Duration in Seconds, Minutes, Hours, Days, ...?", false).queue();
         g.upsertCommand("queue", "It is going to show the playlist").queue();
         g.upsertCommand("skip", "It is going to skip the music currently playing")
-                        .addOption(OptionType.INTEGER, "amount", "Amount of tracks to skip", false).queue();
+                .addOption(OptionType.INTEGER, "amount", "Amount of tracks to skip", false).queue();
         g.upsertCommand("volume","It is going to regulate the volume")
                 .addOption(OptionType.INTEGER, "volume", "Volume in percent", false).queue(); // req
         g.upsertCommand("stop","It is going to stop playing").queue();
@@ -69,10 +82,28 @@ public class Musikroboter {
         g.upsertCommand("loop","Repeats the current track or playlist")
                 .addOption(OptionType.BOOLEAN,"track","Whether it should repeat the playlist or just the playing track",false).queue();
         g.upsertCommand("bass", "Boosts the bass of the original track by the given amount")
-                        .addOption(OptionType.INTEGER, "amount", "Percentage of bass boost", false).queue(); //req
+                .addOption(OptionType.INTEGER, "amount", "Percentage of bass boost", false).queue(); //req
         g.upsertCommand("info","Shows information about the current track").queue();
+        g.upsertCommand("pan", "Rotates the sound around your ears")
+                .addOption(OptionType.NUMBER, "speed", "Frequency with 100 being 1Hz", true).queue();
+        g.upsertCommand("karaoke", "Activates karaoke mode")
+                .addOption(OptionType.INTEGER, "level", "How strong the vocals are suppressed", false)
+                .addOption(OptionType.INTEGER, "mono", "How mono the music is", false)
+                .addOption(OptionType.NUMBER, "band", "at what Hz the vocals are", false)
+                .addOption(OptionType.NUMBER, "width", "how wide the vocals are going to be suppressed", false).queue();
+        g.upsertCommand("speed", "how fast the track should be played")
+                .addOption(OptionType.NUMBER, "speed", "What to multiply the base speed with", true)
+                .addOption(OptionType.NUMBER, "pitch", "What the new pitch should be", false)
+                .addOption(OptionType.NUMBER, "rate", "At what rate to play", false).queue();
         g.upsertCommand("help","It is going to send you instructions of how you're intended to use it").queue();
 
     }
 
+    public static LavalinkClient getClient() {
+        return client;
+    }
+
+    public static JDA getJda() {
+        return jda;
+    }
 }

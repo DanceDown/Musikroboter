@@ -1,20 +1,18 @@
 package me.Musikroboter;
 
-import com.sedmelluq.discord.lavaplayer.player.AudioLoadResultHandler;
-import com.sedmelluq.discord.lavaplayer.player.AudioPlayerManager;
-import com.sedmelluq.discord.lavaplayer.player.DefaultAudioPlayerManager;
-import com.sedmelluq.discord.lavaplayer.source.AudioSourceManagers;
-import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
-import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
-import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
+import dev.arbjerg.lavalink.client.AbstractAudioLoadResultHandler;
+import dev.arbjerg.lavalink.client.Link;
+import dev.arbjerg.lavalink.client.player.*;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.entities.Guild;
-import net.dv8tion.jda.api.entities.TextChannel;
+import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.interactions.callbacks.IReplyCallback;
+import org.jetbrains.annotations.NotNull;
 
 import java.awt.*;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,100 +20,97 @@ import java.util.Map;
 public class PlayerManager {
 
     private static PlayerManager INSTANCE;
-    private final Map<Long, MusicManager> musicManagers;
-    private final AudioPlayerManager playerManager;
+    private final Map<Long, TrackHandler> trackHandlers;
 
-    public PlayerManager() {
-
-        this.musicManagers = new HashMap<>();
-        this.playerManager = new DefaultAudioPlayerManager();
-
-        AudioSourceManagers.registerRemoteSources(this.playerManager);
-        AudioSourceManagers.registerLocalSource(this.playerManager);
-
-        playerManager.getConfiguration().setFilterHotSwapEnabled(true);
-
+    private PlayerManager() {
+        this.trackHandlers = new HashMap<>();
     }
 
-    public MusicManager getMusicManager(Guild g) {
-        return this.musicManagers.computeIfAbsent(g.getIdLong(), (id) -> {
-            final MusicManager manager = new MusicManager(this.playerManager);
-            g.getAudioManager().setSendingHandler(manager.getSendHandler());
-            return manager;
-        });
+    public TrackHandler getTrackHandler(Guild g) {
+        return this.trackHandlers.computeIfAbsent(g.getIdLong(), (id) -> new TrackHandler(g));
     }
 
-    public void load(TextChannel channel, IReplyCallback hook, String url) {
+    public void load(TextChannel channel, IReplyCallback hook, String identifier) {
 
-        boolean isURL;
-        final String link;
-        if(!(isURL = isURL(url))) {
-            link = String.join(" ", "ytsearch:", url);
-        } else link = url;
+        final boolean isURL = isURL(identifier);
+        final String url = (!isURL ? "ytsearch: " : "") + identifier;
+        final Guild g = channel.getGuild();
 
-        final MusicManager manager = this.getMusicManager(channel.getGuild());
+        final TrackHandler handler = this.getTrackHandler(g);
 
-        this.playerManager.loadItemOrdered(manager, link, new AudioLoadResultHandler() {
+        Link link = Musikroboter.getClient().getOrCreateLink(g.getIdLong());
+
+        link.loadItem(url).subscribe(new AbstractAudioLoadResultHandler() {
+
             @Override
-            public void trackLoaded(AudioTrack track) {
-                addTrack(track);
+            public void onSearchResultLoaded(@NotNull SearchResult searchResult) {
+                List<Track> tracks = searchResult.getTracks();
+                if(tracks.isEmpty()) {
+                    hook.replyEmbeds(new EmbedBuilder()
+                            .setTitle("Couldn't find track!")
+                            .setColor(Color.RED)
+                            .setDescription(String.join("","Couldn't find `", url, "`!")).build()).setEphemeral(true).queue();
+                    return;
+                }
+                addTrack(tracks.get(0));
             }
 
             @Override
-            public void playlistLoaded(AudioPlaylist playlist) {
-
-                final List<AudioTrack> list = playlist.getTracks();
+            public void onPlaylistLoaded(@NotNull PlaylistLoaded playlistLoaded) {
+                final List<Track> list = playlistLoaded.getTracks();
                 if(!list.isEmpty()) {
                     if(isURL) {
-                        for(AudioTrack track : list) manager.handler.queue(channel, track);
                         hook.replyEmbeds(new EmbedBuilder()
-                                .setTitle("Adding playlist...")
-                                .setColor(Color.GREEN)
-                                .setDescription(String.join("","You added the playlist `",playlist.getName(), "`")).build()).setEphemeral(true).queue();
+                                        .setTitle("Adding playlist...")
+                                        .setColor(Color.GREEN)
+                                        .setDescription(String.join("", "You added the playlist `", playlistLoaded.getInfo().getName(), "`")).build())
+                                .setEphemeral(true).complete();
+                        for(Track track : list) handler.queue(channel, track);
                     } else {
                         addTrack(list.get(0));
                     }
                 }
-
             }
 
             @Override
-            public void noMatches() {
-
-                hook.replyEmbeds(new EmbedBuilder()
-                        .setTitle("Nothing found")
-                        .setColor(Color.RED)
-                        .setDescription(String.join("", "Couldn't find `", link, "`!")).build()).setEphemeral(true).queue();
-
+            public void ontrackLoaded(@NotNull TrackLoaded trackLoaded) {
+                addTrack(trackLoaded.getTrack());
             }
 
             @Override
-            public void loadFailed(FriendlyException ex) {
-
+            public void loadFailed(@NotNull LoadFailed loadFailed) {
+                System.err.println(loadFailed.getException().getMessage());
                 hook.replyEmbeds(new EmbedBuilder()
                         .setTitle("Couldn't be loaded!")
                         .setColor(Color.RED)
                         .setDescription(String.join("","Couldn't load `", url, "`!")).build()).setEphemeral(true).queue();
+            }
+
+            @Override
+            public void noMatches() {
+                hook.replyEmbeds(new EmbedBuilder()
+                        .setTitle("Nothing found")
+                        .setColor(Color.RED)
+                        .setDescription(String.join("", "Couldn't find `", url, "`!")).build()).setEphemeral(true).queue();
 
             }
 
-            private void addTrack(AudioTrack track) {
-                if(manager.handler.queue(channel, track)) {
+            private void addTrack(Track track) {
+                if(handler.queue(channel, track)) {
                     hook.replyEmbeds(new EmbedBuilder()
-                            .setTitle("Adding track...")
+                            .setTitle("Track added!")
                             .setColor(Color.GREEN)
-                            .setDescription(String.join("", "You added `", track.getInfo().title, "` by `",
-                                    track.getInfo().author, "`")).build()).setEphemeral(true).queue();
+                            .setDescription(String.join("", "You added `", track.getInfo().getTitle(), "` by `",
+                                    track.getInfo().getAuthor(), "`")).build()).setEphemeral(true).queue();
                 } else {
                     hook.replyEmbeds(new EmbedBuilder()
                             .setTitle("Not adding track")
                             .setColor(Color.RED)
-                            .setDescription(String.join("", "Couldn't add `", track.getInfo().title, "` by `",
-                                    track.getInfo().author, "`, probably because the list is full")).build()).setEphemeral(true).queue();
+                            .setDescription(String.join("", "Couldn't add `", track.getInfo().getTitle(), "` by `",
+                                    track.getInfo().getAuthor(), "`, probably because the list is full")).build()).setEphemeral(true).queue();
                 }
             }
         });
-
     }
 
     private boolean isURL(String link) {
@@ -131,5 +126,9 @@ public class PlayerManager {
     public static PlayerManager getINSTANCE() {
         if(INSTANCE == null) INSTANCE = new PlayerManager();
         return INSTANCE;
+    }
+
+    public Map<Long, TrackHandler> getTrackHandlers() {
+        return Collections.unmodifiableMap(trackHandlers);
     }
 }
