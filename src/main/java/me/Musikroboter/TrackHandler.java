@@ -212,8 +212,12 @@ public class TrackHandler {
             if(ev.getEndReason().equals(AudioTrackEndReason.LOAD_FAILED)) {
                 System.err.println("FAILED LOADING TRACK: " + currentTrack.getInfo().getUri());
                 if(failedTimes < 5) failedTimes++;
-                else resetBot();
+                else {
+                    resetBot();
+                    return;
+                }
             }
+
             if(!next())
                 resetBot();
 

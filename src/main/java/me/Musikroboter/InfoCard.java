@@ -47,8 +47,7 @@ public class InfoCard {
     }
 
     public synchronized void updateMessage(Track currentTrack, String nextTrack, TrackHandler handler) {
-
-        if(isPaused) return;
+        
         if(channel == null) return;
         if(currentTrack == null) {
             destroy();
@@ -91,10 +90,12 @@ public class InfoCard {
         embed = builder.build();
 
         updateMessage(embed);
+        isPaused = false;
 
     }
 
     private synchronized void updateMessage(MessageEmbed embed) {
+
         if(msg == null) {
             msg = channel.sendMessageEmbeds(embed).complete();
             msg.addReaction(pause).queue();
@@ -120,6 +121,7 @@ public class InfoCard {
 
     public synchronized void setPaused(boolean paused) {
 
+        isPaused = paused;
         if(msg == null) return;
         try {
             if (paused) {
@@ -148,8 +150,6 @@ public class InfoCard {
                     msg.addReaction(quit).queue();
                 });
             }
-
-            isPaused = paused;
 
         } catch(ErrorResponseException ex) {
             reset();
